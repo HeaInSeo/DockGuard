@@ -41,12 +41,22 @@ has_user_instruction if {
 
 # --- DSF001a: USER 명령어 자체가 없음 ---
 # USER 명령어가 없으면 컨테이너가 root로 실행된다.
+# METADATA
+# title: Non-root USER required
+# description: Dockerfile must specify a non-root USER instruction (not root or UID 0).
+# custom:
+#   rule_id: DSF001
 deny contains msg if {
 	not has_user_instruction
 	msg := "DSF001: Dockerfile에 USER 명령어가 없습니다. root 권한 실행을 방지하려면 비루트 사용자를 지정하세요. (예: USER 1000 또는 USER nonroot)"
 }
 
 # --- DSF001b: USER root / USER 0 명시적 사용 금지 ---
+# METADATA
+# title: Non-root USER required
+# description: Dockerfile must specify a non-root USER instruction (not root or UID 0).
+# custom:
+#   rule_id: DSF001
 deny contains msg if {
 	some inst in input
 	n := normalize(inst)
@@ -58,6 +68,11 @@ deny contains msg if {
 # --- DSF002: ENV에 비밀 키 패턴 포함 금지 ---
 # 변수명에 PASSWORD, SECRET, API_KEY, TOKEN, PASSWD 가 포함된 ENV는 차단한다.
 # 비밀 값은 빌드 시점에 이미지에 포함되어서는 안 된다.
+# METADATA
+# title: No secrets in ENV
+# description: ENV instructions must not contain variables named PASSWORD, SECRET, API_KEY, TOKEN, or PASSWD.
+# custom:
+#   rule_id: DSF002
 deny contains msg if {
 	some inst in input
 	n := normalize(inst)
@@ -69,6 +84,11 @@ deny contains msg if {
 # --- DSF003: ADD 명령어 원격 URL 사용 금지 ---
 # ADD <url> 형태는 빌드 시점 외부 의존성을 도입하여 재현성을 해친다.
 # 파일 다운로드는 RUN wget 또는 RUN curl 에서 명시적으로 처리해야 한다.
+# METADATA
+# title: No remote ADD URLs
+# description: ADD instruction must not reference remote http:// or https:// URLs; use RUN curl/wget instead.
+# custom:
+#   rule_id: DSF003
 deny contains msg if {
 	some inst in input
 	n := normalize(inst)

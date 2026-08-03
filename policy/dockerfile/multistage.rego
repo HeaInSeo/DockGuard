@@ -44,13 +44,21 @@ froms := [inst | some inst in input; lower(inst.Cmd) == "from"]
 count_froms := count(froms)
 
 
-# DFM001: FROM은 반드시 하나
+# METADATA
+# title: Exactly one FROM required
+# description: User Dockerfile must contain exactly one FROM instruction.
+# custom:
+#   rule_id: DFM001
 deny contains msg if {
   count_froms != 1
   msg := "DFM001: 사용자 Dockerfile에는 환경 준비용으로 FROM 명령을 정확히 한 번만 사용해야 합니다."
 }
 
-# DFM002: (guard) FROM이 하나일 때만 AS builder 확인
+# METADATA
+# title: AS builder alias required
+# description: FROM must include AS builder alias (e.g. FROM ubuntu:22.04 AS builder).
+# custom:
+#   rule_id: DFM002
 deny contains msg if {
   count_froms == 1         # 여기서 선행조건을 걸어 줌
   inst := normalize(froms[0])
@@ -58,7 +66,11 @@ deny contains msg if {
   msg := "DFM002: FROM 명령에 `AS builder` 별칭을 지정하세요. (예: FROM ubuntu:20.04 AS builder)"
 }
 
-# DFM003: 최종 스테이지 정의 금지 (FROM이 하나라도 final이면 안 됨)
+# METADATA
+# title: AS final stage reserved
+# description: The alias 'final' is reserved; do not define it in user Dockerfiles.
+# custom:
+#   rule_id: DFM003
 deny contains msg if {
     raw := input[_]
     inst := normalize(raw)
@@ -67,7 +79,11 @@ deny contains msg if {
     msg := "DFM003: 사용자 Dockerfile에 최종 스테이지(FROM ... AS final)를 정의하지 마세요; 시스템이 자동 생성합니다."
 }
 
-# DFM004: COPY --from=builder 금지
+# METADATA
+# title: COPY --from=builder prohibited
+# description: COPY --from=builder must not appear in user-submitted Dockerfiles.
+# custom:
+#   rule_id: DFM004
 deny contains msg if {
     raw := input[_]
     inst := normalize(raw)

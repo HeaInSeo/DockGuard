@@ -3,10 +3,12 @@
 OPA      ?= opa
 CONFTEST ?= conftest
 
-POLICY_DIRS := policy/dockerfile policy/security policy/genomics
+POLICY_DIRS  := policy/dockerfile policy/security policy/genomics
 EXAMPLES_DIR := examples
+BUILD_DIR    := build
+POLICIES_JSON := $(BUILD_DIR)/policies.json
 
-.PHONY: all fmt test-rego test-conftest test
+.PHONY: all fmt test-rego test-conftest test policies-json
 
 all: test
 
@@ -37,3 +39,13 @@ test-conftest:
 # conftest 통합 테스트는 bad 파일이 위반을 내는 것이 정상이므로 별도 타겟으로 분리함
 test: fmt test-rego
 	@echo "All OPA policy tests passed!"
+
+# 4) policies.json 생성: # METADATA 어노테이션 → JSON 추출
+# 생성된 파일은 NodeVault assets/policy/policies.json 으로 배포한다.
+# Note: OPA WASM 빌드(opa build -t wasm)는 CGo 가 필요한 별도 환경에서 수행한다.
+policies-json: $(POLICIES_JSON)
+
+$(POLICIES_JSON): $(shell find policy -name '*.rego' ! -name '*_test.rego')
+	@mkdir -p $(BUILD_DIR)
+	$(OPA) inspect --annotations --format json policy/ | jq '[.annotations[] | select(.annotations.custom.rule_id != null) | {rule_id: .annotations.custom.rule_id, title: .annotations.title, description: .annotations.description}] | unique_by(.rule_id) | sort_by(.rule_id)' > $(POLICIES_JSON)
+	@echo "Generated $(POLICIES_JSON)"

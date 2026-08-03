@@ -35,6 +35,11 @@ normalize(inst) := res if {
 # --- DGF001: conda / mamba / micromamba install 버전 고정 강제 ---
 # `conda install bwa` 형태는 차단한다.
 # 허용: `conda install bwa=0.7.17`, `conda install -f env.yml`, `conda install --file env.yml`
+# METADATA
+# title: conda/mamba install version pinning required
+# description: RUN conda/mamba/micromamba install must specify exact versions (pkg=version) or use -f/--file.
+# custom:
+#   rule_id: DGF001
 deny contains msg if {
 	some inst in input
 	n := normalize(inst)
@@ -56,6 +61,11 @@ conda_install_pinned_or_file(raw) if {
 # --- DGF002: pip install 버전 고정 강제 ---
 # `pip install numpy` 형태는 차단한다.
 # 허용: `pip install numpy==1.24.0`, `pip install -r requirements.txt`, `pip install --requirement requirements.txt`
+# METADATA
+# title: pip install version pinning required
+# description: RUN pip install must specify exact versions (pkg==version) or use -r/--requirement.
+# custom:
+#   rule_id: DGF002
 deny contains msg if {
 	some inst in input
 	n := normalize(inst)
