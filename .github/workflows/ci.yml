@@ -1,0 +1,95 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  OPA_VERSION: v1.4.2
+  # sha256 of opa_linux_amd64_static from the official v1.4.2 release (.sha256 asset)
+  OPA_SHA256: 2c0ccdbbe0b8e2a5d12d9c42d92f1f34f494ffb32d1f3c4ddc36101be637d66f
+  CONFTEST_VERSION: 0.70.1
+  # sha256 of conftest_0.70.1_Linux_x86_64.tar.gz from the official release checksums.txt
+  CONFTEST_SHA256: 613d124b8f6c1f3cee890491f7ab19114cca5a2102ca47cb2e6c35b4c23f9c8a
+  ACTIONLINT_VERSION: 1.7.7
+  WASM_ENTRYPOINTS: dockerfile/multistage/deny
+
+jobs:
+  actionlint:
+    name: Actionlint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run actionlint
+        run: |
+          bash <(curl -sSfL "https://raw.githubusercontent.com/rhysd/actionlint/v${ACTIONLINT_VERSION}/scripts/download-actionlint.bash") "${ACTIONLINT_VERSION}"
+          ./actionlint -color
+
+  policy-bundle:
+    name: Policy bundle (S1)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install OPA (checksum pinned)
+        run: |
+          curl -sSfL -o opa "https://github.com/open-policy-agent/opa/releases/download/${OPA_VERSION}/opa_linux_amd64_static"
+          echo "${OPA_SHA256}  opa" | sha256sum -c -
+          chmod +x opa
+          sudo mv opa /usr/local/bin/opa
+          opa version
+
+      - name: Install conftest (checksum pinned)
+        run: |
+          tarball="conftest_${CONFTEST_VERSION}_Linux_x86_64.tar.gz"
+          curl -sSfL -o "$tarball" "https://github.com/open-policy-agent/conftest/releases/download/v${CONFTEST_VERSION}/${tarball}"
+          echo "${CONFTEST_SHA256}  ${tarball}" | sha256sum -c -
+          tar -xzf "$tarball" conftest
+          sudo mv conftest /usr/local/bin/conftest
+          conftest --version
+
+      - name: Rego format
+        run: make fmt-check
+
+      - name: Rego unit tests
+        run: make test-rego
+
+      - name: Conftest (Dockerfile.bad must be denied)
+        run: make test-conftest-strict
+
+      - name: Reproducible bundle, manifest order, byte-flip negative
+        run: |
+          read -ra eps <<< "${WASM_ENTRYPOINTS}"
+          bash scripts/verify-bundle.sh "${eps[@]}"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: OPA wasm ABI / entrypoint smoke (NodeKit index 0)
+        run: |
+          read -ra eps <<< "${WASM_ENTRYPOINTS}"
+          node scripts/wasm-abi-smoke.mjs build/dockguard.wasm "${eps[@]}"
+
+      - name: Upload bundle artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dockguard-bundle-${{ github.sha }}
+          path: |
+            build/dockguard.wasm
+            build/policies.json
+            build/provenance.json
+            build/SHA256SUMS
+          if-no-files-found: warn
