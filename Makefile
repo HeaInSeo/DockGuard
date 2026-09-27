@@ -48,7 +48,7 @@ test-conftest:
 # CI: Dockerfile.bad 는 반드시 위반을 내야 한다. 위반이 없거나(exit 0) conftest 가
 # 정책을 로드하지 못하면(FAIL 없음) 실패한다.
 test-conftest-strict:
-	@set +e; out="$$($(CONFTEST) test $(EXAMPLES_DIR)/Dockerfile.bad --parser dockerfile --rego-version v1 2>&1)"; rc=$$?; set -e; \
+	@set +e; out="$$($(CONFTEST) test $(EXAMPLES_DIR)/Dockerfile.bad --parser dockerfile --rego-version v1 --no-color 2>&1)"; rc=$$?; set -e; \
 	echo "$$out"; \
 	if [ $$rc -eq 0 ]; then echo "conftest: Dockerfile.bad passed but must be denied"; exit 1; fi; \
 	if ! echo "$$out" | grep -q '^FAIL'; then echo "conftest: exit $$rc without policy failures"; exit 1; fi; \
