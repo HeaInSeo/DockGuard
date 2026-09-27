@@ -27,7 +27,7 @@ fmt:
 
 # CI: 포맷되지 않은 Rego 파일이 있으면 실패
 fmt-check:
-	$(OPA) fmt --fail -l policy
+	$(OPA) fmt --fail -d policy
 
 # 1) OPA 유닛 테스트: 각 policy 디렉토리 단위로 실행
 test-rego:
