@@ -33,6 +33,9 @@ jq_edit() {
   jq "$2" "$tmp/case/$1" >"$tmp/edit.json"
   mv "$tmp/edit.json" "$tmp/case/$1"
 }
+# Re-bind release-provenance.json to the current provenance.json digest, so a
+# provenance.json edit can only be caught by the provenance.json check itself.
+relink_prov() { jq_edit release-provenance.json ".assets[\"provenance.json\"] = \"$(sha256sum "$tmp/case/provenance.json" | cut -d' ' -f1)\""; }
 flip_byte() {
   local f="$1" size offset orig
   size="$(stat -c %s "$f")"
@@ -73,6 +76,12 @@ fresh
 flip_byte "$tmp/case/dockguard.wasm"
 expect_fail "wasm byte flip (sha mismatch)" verify "$tmp/case"
 
+# Only SHA256SUMS covers release-provenance.json, so a stale SUMS entry for a
+# field no other check reads must be rejected by the SUMS digest check.
+fresh
+jq_edit release-provenance.json '.packaging_commit = "0000000000000000000000000000000000000000"'
+expect_fail "release-provenance.json edited without re-sum (stale SHA256SUMS)" verify "$tmp/case"
+
 fresh
 flip_byte "$tmp/case/dockguard.wasm"
 tampered="$(sha256sum "$tmp/case/dockguard.wasm" | cut -d' ' -f1)"
@@ -83,6 +92,7 @@ expect_fail "wasm tampered with consistent SHA256SUMS (digest != pin)" verify "$
 
 fresh
 jq_edit provenance.json ".source_commit = \"$(git rev-parse HEAD)\""
+relink_prov
 resum
 expect_fail "provenance from another source commit" verify "$tmp/case"
 
@@ -98,6 +108,7 @@ expect_fail "entrypoint order changed" verify "$tmp/case"
 
 fresh
 jq_edit provenance.json '.opa_version = "1.4.1"'
+relink_prov
 resum
 expect_fail "provenance toolchain mismatch" verify "$tmp/case"
 
