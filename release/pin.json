@@ -1,0 +1,7 @@
+{
+  "policy_source_commit": "04ceceb81e371d5120ec5fc81776cd3d872d5762",
+  "opa_version": "1.4.2",
+  "entrypoints": ["dockerfile/multistage/deny"],
+  "wasm_sha256": "1b4348478268d5e37868e63fae06296b6209aca2b37593021b1e22e4628227e8",
+  "policies_json_sha256": "454e389cf060a08e1fe0405c56041adcfe3019ebed516a3c1454582752fcf187"
+}

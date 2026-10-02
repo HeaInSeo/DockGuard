@@ -14,12 +14,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  OPA_VERSION: v1.4.2
-  # sha256 of opa_linux_amd64_static from the official v1.4.2 release (.sha256 asset)
-  OPA_SHA256: 2c0ccdbbe0b8e2a5d12d9c42d92f1f34f494ffb32d1f3c4ddc36101be637d66f
-  CONFTEST_VERSION: 0.70.1
-  # sha256 of conftest_0.70.1_Linux_x86_64.tar.gz from the official release checksums.txt
-  CONFTEST_SHA256: 613d124b8f6c1f3cee890491f7ab19114cca5a2102ca47cb2e6c35b4c23f9c8a
+  # OPA and conftest versions/checksums are pinned in .github/actions/install-policy-tools.
   ACTIONLINT_VERSION: 1.7.7
   WASM_ENTRYPOINTS: dockerfile/multistage/deny
 
@@ -41,23 +36,11 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Release packaging (S2) builds from the pinned policy source commit.
+          fetch-depth: 0
 
-      - name: Install OPA (checksum pinned)
-        run: |
-          curl -sSfL -o opa "https://github.com/open-policy-agent/opa/releases/download/${OPA_VERSION}/opa_linux_amd64_static"
-          echo "${OPA_SHA256}  opa" | sha256sum -c -
-          chmod +x opa
-          sudo mv opa /usr/local/bin/opa
-          opa version
-
-      - name: Install conftest (checksum pinned)
-        run: |
-          tarball="conftest_${CONFTEST_VERSION}_Linux_x86_64.tar.gz"
-          curl -sSfL -o "$tarball" "https://github.com/open-policy-agent/conftest/releases/download/v${CONFTEST_VERSION}/${tarball}"
-          echo "${CONFTEST_SHA256}  ${tarball}" | sha256sum -c -
-          tar -xzf "$tarball" conftest
-          sudo mv conftest /usr/local/bin/conftest
-          conftest --version
+      - uses: ./.github/actions/install-policy-tools
 
       - name: Rego format
         run: make fmt-check
@@ -81,6 +64,22 @@ jobs:
         run: |
           read -ra eps <<< "${WASM_ENTRYPOINTS}"
           node scripts/wasm-abi-smoke.mjs build/dockguard.wasm "${eps[@]}"
+
+      - name: Release package dry run (S2, pinned policy source)
+        run: |
+          bash scripts/package-release.sh v0.0.0 build/release
+          cat build/release/release-provenance.json build/release/SHA256SUMS
+
+      - name: Release package negatives (S2)
+        run: bash scripts/test-release-negative.sh
+
+      - name: Upload release dry-run artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dockguard-release-dryrun-${{ github.sha }}
+          path: build/release/
+          if-no-files-found: warn
 
       - name: Upload bundle artifact
         if: always()

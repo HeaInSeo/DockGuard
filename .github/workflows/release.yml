@@ -1,0 +1,58 @@
+name: Release
+
+# Publishes a versioned policy bundle when a vMAJOR.MINOR.PATCH tag is pushed.
+# The wasm is rebuilt from the policy source pinned in release/pin.json, not
+# from the tag commit's policy/ tree. Pushing a tag is a separate, explicit
+# release decision; this workflow never creates tags.
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Package and publish policy bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Tag commit must be on main
+        run: |
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+
+      - uses: ./.github/actions/install-policy-tools
+
+      - name: Rego format, unit tests, conftest
+        run: |
+          make fmt-check
+          make test-rego
+          make test-conftest-strict
+
+      - name: Package release from pinned policy source
+        run: bash scripts/package-release.sh "$VERSION" dist
+
+      - name: Release package negatives
+        run: bash scripts/test-release-negative.sh
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          bash scripts/verify-release.sh dist "$VERSION"
+          src="$(jq -r .policy_source_commit dist/release-provenance.json)"
+          notes="$(printf 'Policy source commit: %s\nPackaging commit: %s\n\nSHA256SUMS:\n%s\n' "$src" "$GITHUB_SHA" "$(cat dist/SHA256SUMS)")"
+          gh release create "$VERSION" dist/* --verify-tag --title "DockGuard policy bundle $VERSION" --notes "$notes"
